@@ -192,9 +192,12 @@ Do not fabricate. Confirm the funder matches "${agency.name}" and not a similarl
     try {
       for (let i = 0; i < sources.length; i++) {
         setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name}`);
-        if (i > 0) await new Promise(r => setTimeout(r, 2000));
+        if (i > 0) await new Promise(r => setTimeout(r, 3000));
         let results = [];
-        try { results = await scanAgency(sources[i]); } catch (e) { failed++; continue; }
+        try {
+          results = await scanAgency(sources[i]);
+          setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — ${results.length} found`);
+        } catch (e) { failed++; setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — error: ${e.message}`); await new Promise(r => setTimeout(r, 1000)); continue; }
         for (const r of results) {
           if (!r || !r.title || !r.link) continue;
           found++;
