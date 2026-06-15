@@ -140,9 +140,13 @@ export default function GrantRfpRadar() {
         sget(K_SOURCES), sget(K_PENDING), sget(K_ITEMS), sget(K_META),
       ]);
       const localAdmin = localGet(K_LOCAL_ADMIN);
-      try { if (s) setSources(JSON.parse(s)); else { setSources(SEED_AGENCIES); await sset(K_SOURCES, JSON.stringify(SEED_AGENCIES)); } } catch(e) { setSources(SEED_AGENCIES); await sset(K_SOURCES, JSON.stringify(SEED_AGENCIES)); }
-      try { if (p) setPending(JSON.parse(p)); } catch(e) {}
-      try { if (it) setItems(JSON.parse(it)); } catch(e) {}
+      const safeParse = (str) => { try { const v = JSON.parse(str); return Array.isArray(v) ? v : null; } catch(e) { return null; } };
+      const parsedSources = s ? safeParse(s) : null;
+      if (parsedSources && parsedSources.length) setSources(parsedSources); else { setSources(SEED_AGENCIES); await sset(K_SOURCES, JSON.stringify(SEED_AGENCIES)); }
+      const parsedPending = p ? safeParse(p) : null;
+      if (parsedPending) setPending(parsedPending);
+      const parsedItems = it ? safeParse(it) : null;
+      if (parsedItems) setItems(parsedItems);
       try { if (meta) { const m = JSON.parse(meta); setAdminHash(m.adminHash || null); setLastScan(m.lastScan || null); } } catch(e) {}
       if (localAdmin === "yes") setIsAdmin(true);
       setLoaded(true);
