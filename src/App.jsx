@@ -140,10 +140,10 @@ export default function GrantRfpRadar() {
         sget(K_SOURCES), sget(K_PENDING), sget(K_ITEMS), sget(K_META),
       ]);
       const localAdmin = localGet(K_LOCAL_ADMIN);
-      if (s) setSources(JSON.parse(s)); else { setSources(SEED_AGENCIES); await sset(K_SOURCES, JSON.stringify(SEED_AGENCIES)); }
-      if (p) setPending(JSON.parse(p));
-      if (it) setItems(JSON.parse(it));
-      if (meta) { const m = JSON.parse(meta); setAdminHash(m.adminHash || null); setLastScan(m.lastScan || null); }
+      try { if (s) setSources(JSON.parse(s)); else { setSources(SEED_AGENCIES); await sset(K_SOURCES, JSON.stringify(SEED_AGENCIES)); } } catch(e) { setSources(SEED_AGENCIES); await sset(K_SOURCES, JSON.stringify(SEED_AGENCIES)); }
+      try { if (p) setPending(JSON.parse(p)); } catch(e) {}
+      try { if (it) setItems(JSON.parse(it)); } catch(e) {}
+      try { if (meta) { const m = JSON.parse(meta); setAdminHash(m.adminHash || null); setLastScan(m.lastScan || null); } } catch(e) {}
       if (localAdmin === "yes") setIsAdmin(true);
       setLoaded(true);
     })();
@@ -184,12 +184,13 @@ Do not fabricate. Confirm the funder matches "${agency.name}" and not a similarl
     setScanning(true); setError(""); setStatus("");
     const existing = new Map(items.map((g) => [itemKey(g), g]));
     let merged = items.map((g) => ({ ...g, isNew: false }));
-    let newCount = 0, found = 0;
+    let newCount = 0, found = 0, failed = 0;
     try {
       for (let i = 0; i < sources.length; i++) {
         setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name}`);
+        if (i > 0) await new Promise(r => setTimeout(r, 2000));
         let results = [];
-        try { results = await scanAgency(sources[i]); } catch (e) { continue; }
+        try { results = await scanAgency(sources[i]); } catch (e) { failed++; continue; }
         for (const r of results) {
           if (!r || !r.title || !r.link) continue;
           found++;
@@ -199,10 +200,12 @@ Do not fabricate. Confirm the funder matches "${agency.name}" and not a similarl
           else { const idx = merged.findIndex((g) => itemKey(g) === k); if (idx >= 0) merged[idx] = { ...merged[idx], ...rec, isNew: false }; }
         }
       }
-      setItems(merged);
-      await sset(K_ITEMS, JSON.stringify(merged));
+      const capped = merged.slice(0, 200);
+      setItems(capped);
+      await sset(K_ITEMS, JSON.stringify(capped));
       await saveMeta({ lastScan: new Date().toISOString() });
-      setStatus(found === 0 ? "Scan complete — nothing verifiable found this round." : `${newCount} new · ${found} confirmed across sources`);
+      const failNote = failed > 0 ? ` · ${failed} sources skipped (API limit)` : "";
+      setStatus(found === 0 ? "Scan complete — nothing verifiable found this round." : `${newCount} new · ${found} confirmed across sources${failNote}`);
     } catch (e) { setError(e.message || "Scan failed — please try again."); }
     setProgress(""); setScanning(false);
   }
