@@ -87,12 +87,15 @@ async function sget(key) {
 }
 async function sset(key, val) {
   try {
-    await fetch("/api/store", {
+    const r = await fetch("/api/store", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key, value: val }),
     });
-  } catch (e) {}
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+    return true;
+  } catch (e) { console.error("sset failed", key, e.message); return false; }
 }
 // The "is this browser unlocked as admin" flag is per-device, so it stays local.
 function localGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
@@ -209,9 +212,10 @@ Do not fabricate. Confirm the funder matches "${agency.name}" and not a similarl
       }
       const capped = merged.slice(0, 200);
       setItems(capped);
-      await sset(K_ITEMS, JSON.stringify(capped));
+      const saved = await sset(K_ITEMS, JSON.stringify(capped));
       await saveMeta({ lastScan: new Date().toISOString() });
       const failNote = failed > 0 ? ` · ${failed} sources skipped` : "";
+      if (!saved) { setError("Results found but could not save to shared database — your team won't see them until this is fixed."); }
       setStatus(found === 0 ? "Scan complete — nothing verifiable found this round." : `${newCount} new · ${found} confirmed across sources${failNote}`);
     } catch (e) { setError(e.message || "Scan failed — please try again."); }
     setProgress(""); setScanning(false);
