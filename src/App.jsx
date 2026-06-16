@@ -200,7 +200,13 @@ Do not fabricate. Confirm the funder matches "${agency.name}" and not a similarl
         try {
           results = await scanAgency(sources[i]);
           setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — ${results.length} found`);
-        } catch (e) { failed++; setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — skipped`); await new Promise(r => setTimeout(r, 1000)); continue; }
+        } catch (e) {
+          failed++;
+          setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — error: ${e.message}`);
+          await new Promise(r => setTimeout(r, 1000));
+          if (failed >= 3 && failed === i + 1) { setError(`Scan stopped — API error on every source: ${e.message}`); break; }
+          continue;
+        }
         for (const r of results) {
           if (!r || !r.title || !r.link) continue;
           found++;
