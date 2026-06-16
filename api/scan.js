@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 3000,
+        max_tokens: 2000,
         system:
           "You are a meticulous grant-research verifier. You never invent opportunities or URLs. Output only a valid, closed JSON array.",
         messages: [{ role: "user", content: prompt }],
