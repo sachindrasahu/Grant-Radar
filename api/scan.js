@@ -29,13 +29,15 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-beta": "web-search-2025-03-05",
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 2000,
         system:
-          "You are a grant research assistant. You have extensive knowledge of funding opportunities. Output only a valid, closed JSON array — no markdown, no prose.",
+          "You are a meticulous grant-research verifier. You never invent opportunities or URLs. Output only a valid, closed JSON array.",
         messages: [{ role: "user", content: prompt }],
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
       }),
     });
     const data = await r.json();
