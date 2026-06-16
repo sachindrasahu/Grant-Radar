@@ -161,24 +161,19 @@ export default function GrantRfpRadar() {
     await sset(K_META, JSON.stringify(next));
   }, [adminHash, lastScan]);
 
-  // ── scanning — batched to avoid web_search rate limits ──
-  async function scanBatch(batch, batchNum, totalBatches) {
-    const sourceList = batch.map((a, i) => {
-      const hint = a.url ? `URL hint: ${a.url}` : `no URL — search by name`;
-      return `${i + 1}. "${a.name}" (${hint})`;
-    }).join("\n");
+  // ── scanning — one source at a time for reliable JSON ──
+  async function scanAgency(agency) {
+    const hint = agency.url
+      ? `A URL the team noted is ${agency.url} — treat as a starting hint; if it moved or 404s, find the funder's current opportunities page yourself.`
+      : `No URL provided — search for this funder by name and find their current official grants/tenders page yourself.`;
+    const prompt = `Using web search, find funding opportunities, grants, RFPs, or tenders currently offered by "${agency.name}" open to organizations BASED IN INDIA, relating to ${FOCUS}.
 
-    const prompt = `Using web search, find currently open funding opportunities, grants, RFPs, or tenders from EACH of the following funders, open to organizations BASED IN INDIA, relating to ${FOCUS}.
+${hint}
 
-Sources to check:
-${sourceList}
+For each opportunity actually found in search results, VERIFY it appears currently open (not expired). Output ONLY a raw JSON array (no markdown/prose/fences). Each object has exactly:
+"title", "funder" (e.g. "${agency.name}"), "type" (one of "Grant","RFP","Tender","Fellowship","Other"), "deadline" (ISO YYYY-MM-DD, or "rolling", or "unknown"), "amount" (short or "unknown"), "focus" (short), "india_eligible" (one of "yes","check","no"), "verified" (one of "live","unconfirmed" — "live" ONLY if a result clearly shows this specific call is open with a future or rolling deadline), "summary" (2 sentences max), "link" (exact URL found — NEVER invent one; if not found use the official homepage you found and mark "unconfirmed").
 
-Search each funder separately. For each opportunity found, VERIFY it is currently open (not expired). Output ONLY a raw JSON array (no markdown/prose/fences). Each object has exactly:
-"title", "funder" (exact funder name from the list above), "type" (one of "Grant","RFP","Tender","Fellowship","Other"), "deadline" (ISO YYYY-MM-DD, or "rolling", or "unknown"), "amount" (short or "unknown"), "focus" (short), "india_eligible" (one of "yes","check","no"), "verified" (one of "live","unconfirmed" — "live" ONLY if clearly open with a future or rolling deadline), "summary" (2 sentences max), "link" (exact URL found — NEVER invent; if not found use official homepage and mark "unconfirmed").
-
-Do not fabricate. Find none for a funder → omit it. Return [] if nothing found across all.`;
-
-    setProgress(`Scanning batch ${batchNum}/${totalBatches} (${batch.map(a => a.name).join(", ")})`);
+Do not fabricate. Confirm the funder matches "${agency.name}" and not a similarly-named other org. Find none → return [].`;
     const res = await fetch("/api/scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -194,17 +189,15 @@ Do not fabricate. Find none for a funder → omit it. Return [] if nothing found
     const existing = new Map(items.map((g) => [itemKey(g), g]));
     let merged = items.map((g) => ({ ...g, isNew: false }));
     let newCount = 0, found = 0, failed = 0;
-    const BATCH_SIZE = 4;
-    const batches = [];
-    for (let i = 0; i < sources.length; i += BATCH_SIZE) batches.push(sources.slice(i, i + BATCH_SIZE));
     try {
-      for (let b = 0; b < batches.length; b++) {
-        if (b > 0) await new Promise(r => setTimeout(r, 5000));
+      for (let i = 0; i < sources.length; i++) {
+        setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name}`);
+        if (i > 0) await new Promise(r => setTimeout(r, 1000));
         let results = [];
         try {
-          results = await scanBatch(batches[b], b + 1, batches.length);
-          setProgress(`Batch ${b + 1}/${batches.length} done — ${results.length} found`);
-        } catch (e) { failed += batches[b].length; setProgress(`Batch ${b + 1}/${batches.length} failed: ${e.message}`); await new Promise(r => setTimeout(r, 2000)); continue; }
+          results = await scanAgency(sources[i]);
+          setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — ${results.length} found`);
+        } catch (e) { failed++; setProgress(`Checking ${i + 1}/${sources.length}: ${sources[i].name} — skipped`); await new Promise(r => setTimeout(r, 1000)); continue; }
         for (const r of results) {
           if (!r || !r.title || !r.link) continue;
           found++;
