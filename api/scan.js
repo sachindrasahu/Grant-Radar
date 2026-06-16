@@ -31,8 +31,8 @@ export default async function handler(req, res) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 1500,
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
         system:
           "You are a grant research assistant. You have extensive knowledge of funding opportunities. Output only a valid, closed JSON array — no markdown, no prose.",
         messages: [{ role: "user", content: prompt }],
