@@ -1,6 +1,5 @@
-// /api/scan — server-side relay to the Anthropic API.
+// /api/scan — server-side relay to the Gemini API with Google Search grounding.
 // The API key lives ONLY here (in an env var), never in browser code.
-// The browser sends { prompt }, we add the key and call Anthropic.
 
 export const config = { maxDuration: 60 };
 
@@ -8,9 +7,9 @@ export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "Server is missing ANTHROPIC_API_KEY. Set it in Vercel project settings." });
+    return res.status(500).json({ error: "Server is missing GEMINI_API_KEY. Set it in Vercel project settings." });
   }
 
   let body = req.body;
@@ -23,31 +22,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "web-search-2025-03-05",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2000,
-        system:
-          "You are a meticulous grant-research verifier. You never invent opportunities or URLs. Output only a valid, closed JSON array.",
-        messages: [{ role: "user", content: prompt }],
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-      }),
-    });
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: "You are a meticulous grant-research verifier. You never invent opportunities or URLs. Output only a valid, closed JSON array — no markdown, no prose, no code fences." }]
+          },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          tools: [{ google_search: {} }],
+          generationConfig: { maxOutputTokens: 2000, temperature: 0.1 },
+        }),
+      }
+    );
     const data = await r.json();
     if (!r.ok) {
-      return res.status(r.status).json({ error: (data && data.error && data.error.message) || "Anthropic API error" });
+      return res.status(r.status).json({ error: (data && data.error && data.error.message) || "Gemini API error" });
     }
-    // Return only the text blocks the frontend needs.
-    const text = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
+    const text = (data.candidates?.[0]?.content?.parts || [])
+      .filter((p) => p.text)
+      .map((p) => p.text)
       .join("\n");
     return res.status(200).json({ text });
   } catch (e) {
